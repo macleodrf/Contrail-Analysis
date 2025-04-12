@@ -1,6 +1,6 @@
 # contrail_persistence.py
 # Analyzes contrail persistence at 200–300 hPa using Wyoming radiosonde data
-# Copy-paste into Grok or run in Python. See User Guide on X for details.
+# Run in Grok or Python, fill prompts interactively. See User Guide on X: [Link to guide].
 
 import pandas as pd
 import numpy as np
@@ -10,11 +10,11 @@ from datetime import datetime, timedelta
 print("""
 GROK ANALYSIS of CONTRAIL PERSISTENCE
 =====================================
-Enter the following to analyze contrail persistence (200–300 hPa):
+Enter data to analyze contrail persistence (200–300 hPa):
 - Times in 'HHZ DD Mon YYYY' (e.g., '12Z 12 Apr 2025') or 'YYYY-MM-DD HH:MM' (e.g., '2025-04-12 12:00').
 - Observation time must be 00Z or 12Z.
 - Paste radiosonde data from Wyoming (300–200 hPa, PRES, TEMP, DWPT).
-See full User Guide on X for details: [Link to guide or post].
+See User Guide on X for details: [Link to guide or post].
 """)
 
 def saturation_vapor_pressure_ice(T_c):
@@ -42,7 +42,7 @@ def suggest_closest_obs_time(img_dt):
         next_day = img_date + timedelta(days=1)
         return datetime(next_day.year, next_day.month, next_day.day, 0), "00Z"
 
-def parse_time_input(prompt, time_str, allow_any_time=False, suggested_time=None):
+def parse_time_input(time_str, allow_any_time=False, suggested_time=None):
     try:
         dt = datetime.strptime(time_str, "%HZ %d %b %Y")
     except ValueError:
@@ -69,21 +69,25 @@ def check_time_proximity(obs_dt, img_dt, suggested_time):
         return False, f"Observation time is more than 6 hours from image time. Suggested observation time: {suggested_time}"
     return True, ""
 
-# Input fields
+# Interactive input prompts
 nws_id_station = input("NWS ID and Station Name (e.g., '72365 - ABQ Albuquerque'): ")
+while not nws_id_station.strip():
+    print("Error: Station name cannot be empty.")
+    nws_id_station = input("NWS ID and Station Name (e.g., '72365 - ABQ Albuquerque'): ")
+
 image_time_date = input("Image Date and Time UTC (e.g., '01Z 12 Apr 2025' or '2025-04-12 01:00'): ")
-img_dt, image_time_date = parse_time_input("Image Date and Time UTC: ", image_time_date, allow_any_time=True)
+img_dt, image_time_date = parse_time_input(image_time_date, allow_any_time=True)
 while img_dt is None:
     image_time_date = input("Image Date and Time UTC (e.g., '01Z 12 Apr 2025' or '2025-04-12 01:00'): ")
-    img_dt, image_time_date = parse_time_input("Image Date and Time UTC: ", image_time_date, allow_any_time=True)
+    img_dt, image_time_date = parse_time_input(image_time_date, allow_any_time=True)
 
 suggested_dt, suggested_z = suggest_closest_obs_time(img_dt)
 suggested_time = suggested_dt.strftime("%HZ %d %b %Y")
 obs_time_date = input(f"Observation Time and Date UTC (e.g., '00Z 12 Apr 2025' or '2025-04-12 00:00', suggested: {suggested_time}): ")
-obs_dt, obs_time_date = parse_time_input("Observation Time and Date UTC: ", obs_time_date, allow_any_time=False, suggested_time=suggested_time)
+obs_dt, obs_time_date = parse_time_input(obs_time_date, allow_any_time=False, suggested_time=suggested_time)
 while obs_dt is None:
     obs_time_date = input(f"Observation Time and Date UTC (e.g., '00Z 12 Apr 2025' or '2025-04-12 00:00', suggested: {suggested_time}): ")
-    obs_dt, obs_time_date = parse_time_input("Observation Time and Date UTC: ", obs_time_date, allow_any_time=False, suggested_time=suggested_time)
+    obs_dt, obs_time_date = parse_time_input(obs_time_date, allow_any_time=False, suggested_time=suggested_time)
 
 is_valid_time, time_error = check_time_proximity(obs_dt, img_dt, suggested_time)
 if not is_valid_time:
@@ -91,11 +95,18 @@ if not is_valid_time:
     print("Proceeding with calculations, but results may be less accurate.")
 
 image_location = input("Image Location - nearest town or region (e.g., 'Albuquerque, NM' or 'Central New Mexico'): ")
+while not image_location.strip():
+    print("Error: Location cannot be empty.")
+    image_location = input("Image Location - nearest town or region (e.g., 'Albuquerque, NM' or 'Central New Mexico'): ")
+
 print("\nRadiosonde Data (paste from Wyoming archive, 300–200 hPa, press Enter twice to finish):")
 lines = []
 while True:
     line = input()
     if line == "":
+        if not lines:
+            print("Error: Radiosonde data cannot be empty.")
+            continue
         break
     lines.append(line)
 user_data = "\n".join(lines)
