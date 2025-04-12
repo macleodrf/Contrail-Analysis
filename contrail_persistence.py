@@ -47,7 +47,7 @@ def parse_time_input(time_str, allow_any_time=False, suggested_time=None):
         dt = datetime.strptime(time_str, "%HZ %d %b %Y")
     except ValueError:
         try:
-            dt = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
+            dt = datetime.strptime(time_str, "%Y-%-m-%d %H:%M")
         except ValueError:
             print("Error: Use 'HHZ DD Mon YYYY' (e.g., '12Z 12 Apr 2025') or 'YYYY-MM-DD HH:MM' (e.g., '2025-04-12 12:00').")
             if suggested_time:
@@ -165,3 +165,4 @@ if max_rhi is not None:
     print(f"{max_persistence}")
 else:
     print("\nNo data available in 200–300 hPa range.")
+ 
