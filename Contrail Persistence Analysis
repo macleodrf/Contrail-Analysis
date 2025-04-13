@@ -1,0 +1,115 @@
+# contrail_persistence.py
+# Analyzes contrail persistence at 200–300 hPa using Wyoming radiosonde data
+# Run in Grok or Python, fill prompts interactively. See User Guide on X: [Link to guide].
+
+import pandas as pd
+import numpy as np
+from io import StringIO
+from datetime import datetime, timedelta
+
+print("USER INPUT")
+
+def saturation_vapor_pressure_ice(T_c):
+    return 6.112 * np.exp((22.46 * T_c) / (T_c + 272.62))
+
+def saturation_vapor_pressure_water(Td_c):
+    return 6.112 * np.exp((17.67 * Td_c) / (Td_c + 243.5))
+
+def parse_time_input(time_str, allow_any_time=False):
+    formats = [
+        '%Y-%m-%d %H:%M', '%Y-%m-%d %H%M', '%d %b %Y %H:%M', '%d %b %Y %H%M',
+        '%Y%m%d %H:%M', '%Y%m%d %H%M', '%m/%d/%Y %H:%M', '%m/%d/%Y %H%M'
+    ]
+    if allow_any_time:
+        formats += ['%Y-%m-%d', '%d %b %Y', '%Y%m%d', '%m/%d/%Y']
+    for fmt in formats:
+        try:
+            return datetime.strptime(time_str.strip(), fmt), time_str
+        except ValueError:
+            continue
+    return None, time_str
+
+nws_id_station = input("NWS ID and Station Name: ")
+while not nws_id_station.strip():
+    print("Error: Station name cannot be empty.")
+    nws_id_station = input("NWS ID and Station Name: ")
+
+image_time_date = input("Image Date and Time UTC: ")
+img_dt, image_time_date = parse_time_input(image_time_date, allow_any_time=True)
+while img_dt is None:
+    print("Error: Invalid format. Use YYYY-MM-DD HH:MM or similar.")
+    image_time_date = input("Image Date and Time UTC: ")
+    img_dt, image_time_date = parse_time_input(image_time_date, allow_any_time=True)
+
+obs_time_date = input("Obs Time and Date: ")
+obs_dt, obs_time_date = parse_time_input(obs_time_date)
+while obs_dt is None:
+    print("Error: Invalid format. Use YYYY-MM-DD HH:MM or similar.")
+    obs_time_date = input("Obs Time and Date: ")
+    obs_dt, obs_time_date = parse_time_input(obs_time_date)
+
+image_location = input("Image Location: ")
+while not image_location.strip():
+    print("Error: Location cannot be empty.")
+    image_location = input("Image Location: ")
+
+print("Radiosonde Data:")
+print("(Paste PRES TEMP DWPT rows for 300–200 hPa, press Enter twice to finish)")
+lines = []
+while True:
+    line = input()
+    if line.strip() == "":
+        if len(lines) > 0 and lines[-1].strip() == "":
+            break
+        lines.append(line)
+    else:
+        lines.append(line)
+
+raw_data = "\n".join(lines).strip()
+if not raw_data:
+    print("Error: No data provided.")
+    exit(1)
+
+try:
+    data = pd.read_csv(StringIO(raw_data), delim_whitespace=True, names=['PRES', 'TEMP', 'DWPT'])
+except Exception as e:
+    print(f"Error: Invalid data format. {e}")
+    exit(1)
+
+if not all(col in data for col in ['PRES', 'TEMP', 'DWPT']):
+    print("Error: Data must include PRES, TEMP, DWPT columns.")
+    exit(1)
+
+data = data[data['PRES'].between(200, 300)]
+if data.empty:
+    print("Error: No data in 200–300 hPa range.")
+    exit(1)
+
+time_diff = abs((img_dt - obs_dt).total_seconds() / 3600)
+if time_diff > 6:
+    print(f"Warning: Time difference between image ({image_time_date}) and obs ({obs_time_date}) is {time_diff:.1f} hours, exceeding 6 hours.")
+
+data['T_c'] = data['TEMP']
+data['Td_c'] = data['DWPT']
+data['e_i'] = saturation_vapor_pressure_ice(data['T_c'])
+data['e_w'] = saturation_vapor_pressure_water(data['Td_c'])
+data['RHi'] = (data['e_w'] / data['e_i']) * 100
+
+rhi_300 = data[data['PRES'] == 300]['RHi'].iloc[0] if 300 in data['PRES'].values else np.nan
+rhi_250 = data[data['PRES'] == 250]['RHi'].iloc[0] if 250 in data['PRES'].values else np.nan
+rhi_200 = data[data['PRES'] == 200]['RHi'].iloc[0] if 200 in data['PRES'].values else np.nan
+rhi_max = data['RHi'].max()
+
+print("\nCONTRAIL PERSISTENCE ANALYSIS")
+print("============================")
+print(f"NWS ID and Station: {nws_id_station}")
+print(f"Observation Time: {obs_time_date}")
+print(f"Image Time UTC: {image_time_date}")
+print(f"Image Location: {image_location}")
+print("\nRelative Humidity w.r.t. Ice (RHi):")
+print(f"  300 hPa: {rhi_300:.2f}% {'(missing)' if np.isnan(rhi_300) else ''}")
+print(f"  250 hPa: {rhi_250:.2f}% {'(missing)' if np.isnan(rhi_250) else ''}")
+print(f"  200 hPa: {rhi_200:.2f}% {'(missing)' if np.isnan(rhi_200) else ''}")
+print(f"  Maximum: {rhi_max:.2f}%")
+print("\nPersistent contrails are possible if RHi ≥ 100% at flight levels.")
+print("Persistent contrails are" + (" possible." if rhi_max >= 100 else " not possible."))
